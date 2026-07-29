@@ -1,0 +1,12 @@
+.git
+__pycache__
+*.pyc
+*.pyo
+data
+session
+*.session
+*.db*
+venv312
+.env
+android/.git
+android/*.apk

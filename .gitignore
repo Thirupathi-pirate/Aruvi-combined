@@ -1,0 +1,23 @@
+.env
+backend/.env
+code/.env
+code/repo/
+__pycache__/
+*.pyc
+*.pyo
+data/
+session/
+*.session
+*.db
+*.db-shm
+*.db-wal
+opencode
+cloudflared
+gdrive_env.txt
+code/env.txt
+test.md
+# CF Worker files (deployed separately)
+worker.js
+cf-worker.js
+wrangler.toml
+.wrangler/

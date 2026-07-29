@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aruvi</title>
+    <meta
+      name="description"
+      content="Stream your Telegram files on any device"
+    />
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      window.__BACKEND_URL__ = '';
+    </script>
+    <script>
+window.addEventListener('pagehide', function(){
+  var el = document.querySelector('video,audio');
+  if (!el) return;
+  var pos = Math.floor(el.currentTime);
+  if (pos <= 0) return;
+  var src = el.currentSrc || el.src;
+  if (!src) return;
+  var m = src.match(/\/api\/files\/(\d+)\//);
+  if (!m) return;
+  var id = parseInt(m[1]);
+  var dur = el.duration;
+  var tok = localStorage.getItem('access_token');
+  if (!tok) return;
+  fetch('/api/files/' + id + '/progress', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':'Bearer '+tok},
+    body: JSON.stringify({position:pos,duration:Math.floor(dur)||0}),
+    keepalive: true
+  }).catch(function(){});
+});
+    </script>
+    <script type="module" crossorigin src="/assets/index-l3kqb3yZ.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DnfKhitm.css">
+  </head>
+  <body class="bg-dark-950 text-white">
+    <div id="root"></div>
+  </body>
+</html>
