@@ -1,121 +1,112 @@
----
-title: Aruvi Backend
-emoji: 🎬
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
----
-
 # Aruvi — Telegram Media Streaming Platform
 
-[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face%20Spaces-blue)](https://huggingface.co/spaces/wpbtvr/teleplay-backend)
-
 Stream your Telegram media files (videos, audio) to any browser or Android TV using multi-bot parallel streaming with intelligent caching.
+
+## Repository Structure
+
+```
+aruvi-combined/
+├── backend/             # FastAPI backend + SPA frontend
+│   ├── app/             # Python backend code
+│   │   ├── main.py      # FastAPI application entrypoint
+│   │   ├── routers/     # API routes (files, auth, streaming, download, legal)
+│   │   ├── static/      # Landing page (landing.html), SPA (index.html + JS bundle)
+│   │   └── models/      # SQLAlchemy models
+│   ├── requirements.txt
+│   └── run.py           # Startup script (uvicorn + uvloop)
+├── android/             # Android app source (Gradle project)
+│   ├── app/             # Kotlin source
+│   ├── build.gradle.kts
+│   └── *.apk            # Pre-built APKs
+├── Dockerfile           # Production container image
+├── setup-cloudflare.sh  # Cloudflare tunnel setup script
+└── README.md
+```
+
+## Quick Start
+
+### 1. Backend (Docker)
+
+```bash
+docker build -t aruvi-backend .
+docker run -p 7680:7680 \
+  -e TELEGRAM_API_ID=... \
+  -e TELEGRAM_API_HASH=... \
+  -e TELEGRAM_BOT_TOKEN=... \
+  -e TELEGRAM_STORAGE_CHANNEL_ID=... \
+  -e DATABASE_URL=sqlite+aiosqlite:///data/db.sqlite \
+  aruvi-backend
+```
+
+Environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_API_ID` | yes | Telegram API ID |
+| `TELEGRAM_API_HASH` | yes | Telegram API hash |
+| `TELEGRAM_BOT_TOKEN` | yes | Main bot token |
+| `TELEGRAM_STORAGE_CHANNEL_ID` | yes | Channel ID for media storage |
+| `TELEGRAM_HELPER_BOT_TOKENS` | no | Comma-separated helper bot tokens for parallel fetching |
+| `DATABASE_URL` | no | Default: `sqlite+aiosqlite:///data/db.sqlite` |
+| `TUNNEL_TOKEN` | no | Cloudflare tunnel token |
+
+### 2. Android App
+
+Open `android/` in Android Studio, or install a pre-built APK:
+- `android/Aruvi-v2.0.0-mobile.apk` — Phone/tablet
+- `android/Aruvi-v2.0.0-tv.apk` — Android TV
+
+### 3. Cloudflare Tunnel (optional)
+
+```bash
+chmod +x setup-cloudflare.sh
+./setup-cloudflare.sh
+```
+
+This script installs `cloudflared`, authenticates, creates a tunnel, routes a DNS record, and installs as a systemd service.
 
 ## Architecture
 
 ```
 Browser/TV App → Cloudflare Tunnel → FastAPI (uvicorn) → PyroTGFork clients → Telegram MTProto
                                     ↕
-                         Sliding Window Cache (500MB RAM global)
+                         Sliding Window Cache (700MB per-video RAM)
                                     ↕
-                          NVMe Disk Cache (13GB, 3h TTL)
+                          ChunkCache (700MB max, 600s TTL)
 ```
 
 ### Key Components
 
 | Component | Description |
 |-----------|-------------|
-| **FastAPI backend** | REST API for auth, file listing, streaming |
-| **14 Telegram bots** | 1 main bot + 13 helper bots for parallel chunk fetching |
-| **StreamCache** | Position-aware sliding window: 300MB fwd + 100MB back per stream |
-| **CacheManager** | Global 500MB RAM limit across all streams, spills to NVMe |
-| **Disk cache** | All chunks persisted to NVMe (`data/chunks/`), 3h TTL, 13GB max |
-| **Status monitor** | Live dashboard at `monitor.aaruvi.space` |
-
-### Streaming Pipeline
-
-1. **All-bot warmup** — all 14 bots fetch messages 1-20 at startup
-2. **Fast-start** — first 13 chunks as 1-chunk batches across all 13 helpers
-3. **Batch fetch** — remaining chunks in parallel (BATCH_SIZE=5 per bot)
-4. **Sliding window** — 300MB ahead / 100MB behind stays in RAM; rest to NVMe
-5. **100MB lookahead** — maintains cushion against Telegram latency spikes
-6. **Global OOM guard** — evicts farthest chunks across all streams at 500MB
+| **FastAPI backend** | REST API for auth, file listing, streaming, download |
+| **11 Telegram bots** | 1 main + 10 helpers for parallel chunk fetching |
+| **ChunkCache** | Per-video 700MB RAM cache, BATCH_SIZE=10, CHUNK_SIZE=1MB |
+| **Landing page** | Dark-themed `/` with Inter font, gradient AR logo |
+| **SPA** | React player at `/login` (pre-built, served as static files) |
+| **Download page** | `/download` — lists Android APK files |
 
 ## Deployments
 
 ### HidenCloud (current)
 
-3GB ARM64, 15GB NVMe. Accessible via Cloudflare Tunnel:
+3.3GB ARM64 container, daily restart at 3:30 AM IST.
 
 | Domain | Service |
 |--------|---------|
-| `REDACTED_DOMAIN` | TelePlay web player |
-| `REDACTED_DOMAIN` | opencode Web UI (debug) |
-| `monitor.aaruvi.space` | Status dashboard |
+| `movie.aaruvi.space` | Aruvi web player (via Cloudflare tunnel) |
+| `opencode.aaruvi.space` | AI coding assistant (debug) |
 
-```bash
-# HidenCloud runs: python /home/container/run.py
-# Fresh git clone on every restart:
-git clone https://github.com/Thirupathi-pirate/Aruvi-backend.git code/repo
-```
+### Persistence
 
-`.env`:
-```
-TELEGRAM_API_ID=
-TELEGRAM_API_HASH=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_STORAGE_CHANNEL_ID=
-TELEGRAM_HELPER_BOT_TOKENS=token2,token3,...,token14
-DATABASE_URL=postgresql+asyncpg://...
-TUNNEL_TOKEN=
-```
+Code lives at `github.com/Thirupathi-pirate/Aruvi-combined`. On container restart, the platform does a fresh `git clone` — changes must be pushed to the repo.
 
-Daily exit at 3:30 AM IST — fresh IP on restart.
+## Memory
 
-### Hugging Face Spaces (migrating)
-
-Deployed via Docker:
-
-```bash
-docker build -t aruvi-backend .
-docker run -p 7860:7860 \
-  -e TELEGRAM_API_ID=... \
-  -e TELEGRAM_API_HASH=... \
-  -e TELEGRAM_BOT_TOKEN=... \
-  -e TELEGRAM_STORAGE_CHANNEL_ID=... \
-  aruvi-backend
-```
-
-Env vars specific to HF Spaces:
-
-| Variable | Required | Notes |
-|----------|----------|-------|
-| `CLOUDFLARE_WORKERS_TOKEN` | no | Auto-deploys CF Worker proxy for `api.telegram.org` |
-| `CLOUDFLARE_PROXY_URL` | no | Pre-existing proxy URL (skip auto-setup) |
-| `CLOUDFLARE_PROXY_SECRET` | no | Shared secret for proxy auth |
-| `APP_START_CMD` | no | Default: `uvicorn app.main:app --host 0.0.0.0 --port 7860` |
-
-## Key Design Decisions
-
-- **BATCH_SIZE=5** — 5 × 1MB chunks = 5MB per bot batch; reduced from 10 for faster first-byte
-- **Global 500MB RAM** — not per-stream; prevents OOM with multiple concurrent streams
-- **All chunks to NVMe** — both ahead and behind chunks persist; enables instant rewind without Telegram refetch
-- **Per-bot fresh Message** — each worker fetches its own `get_messages()` to avoid cross-bot `FILE_REFERENCE_INVALID`
-- **Sentinels for shutdown** — `concurrency` None tuples on task queue signal workers to stop
-- **`reconnect_client` uses `start()`** — gets new auth key on `AuthKeyUnregistered`, not just `connect()`
-
-## Tech Stack
-
-- **Backend**: Python 3.11, FastAPI, SQLAlchemy async, Kurigram (Pyrogram fork)
-- **Database**: PostgreSQL (Supabase) or SQLite
-- **Cache**: In-memory + NVMe disk with 3h TTL
-- **Tunnel**: Cloudflare Tunnel (cloudflared) + Cloudflare Workers proxy
-- **Frontend**: React (pre-built, served as static files)
-- **Platform**: HidenCloud ARM64 container / Hugging Face Spaces
+- Baseline Python RSS: ~160-220MB
+- ChunkCache: 700MB max per video, Semaphore(700)
+- jemalloc via `LD_PRELOAD` with background threads
+- uvloop 0.21.0 pinned (0.22.x segfaults on aarch64)
 
 ## License
 
