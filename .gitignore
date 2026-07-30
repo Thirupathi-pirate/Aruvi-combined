@@ -1,7 +1,5 @@
 .env
 backend/.env
-code/.env
-code/repo/
 __pycache__/
 *.pyc
 *.pyo
@@ -14,10 +12,15 @@ session/
 opencode
 cloudflared
 gdrive_env.txt
-code/env.txt
 test.md
 # CF Worker files (deployed separately)
 worker.js
 cf-worker.js
 wrangler.toml
 .wrangler/
+# Clutter / dev artifacts
+help.txt
+android/doubt.txt
+android/debug_prompt.txt
+# Leftover from old repo structure
+code/
